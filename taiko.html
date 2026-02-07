@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PRESENCE DRUMS (LOWER)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #111;
+            font-family: 'Courier New', monospace;
+            color: #eee;
+        }
+
+        #game {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            pointer-events: none;
+        }
+
+        /* ZONES */
+        .zone {
+            flex: 1;
+            border: 2px solid #444;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.2);
+            transition: border-color 0.2s;
+        }
+
+        .spacer {
+            width: 10%;
+            background: rgba(0, 0, 0, 0.5);
+            border-left: 1px dashed #555;
+            border-right: 1px dashed #555;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+
+        /* THRESHOLD LINES */
+        .thresh-line {
+            position: absolute;
+            top: 60%;
+            width: 100%;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.3);
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+            z-index: 5;
+        }
+
+        .label-line {
+            position: absolute;
+            top: 58%;
+            right: 10px;
+            font-size: 10px;
+            color: #aaa;
+        }
+
+        /* HUD */
+        .label-group {
+            text-align: center;
+            z-index: 10;
+            pointer-events: none;
+            text-shadow: 2px 2px #000;
+            margin-top: 200px;
+        }
+
+        .label {
+            font-size: 4vw;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .sub-label {
+            font-size: 1.5vw;
+            color: #aaa;
+            margin-top: 5px;
+        }
+
+        .swatch {
+            width: 30px;
+            height: 30px;
+            border: 2px solid #fff;
+            margin: 10px auto;
+            background: #333;
+            box-shadow: 0 0 10px #000;
+        }
+
+        /* METER */
+        .result {
+            font-size: 24px;
+            font-weight: bold;
+            height: 30px;
+            color: #555;
+            margin-top: 10px;
+        }
+
+        .result.active {
+            color: #fff;
+            text-shadow: 0 0 10px #fff;
+        }
+
+        .main-score {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 8vw;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: bold;
+            text-shadow: 0 0 20px #fff;
+            pointer-events: none;
+            z-index: 20;
+            display: none;
+            /* Hidden by default, shown in game */
+        }
+
+        /* CANVAS */
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 0;
+            transform: scaleX(-1);
+            cursor: crosshair;
+            pointer-events: auto;
+        }
+
+        /* CONTROL PANEL */
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            z-index: 100;
+            font-size: 12px;
+            display: flex;
+            gap: 15px;
+            pointer-events: auto;
+            align-items: center;
+            border: 1px solid #555;
+        }
+
+        input[type=range] {
+            vertical-align: middle;
+            width: 80px;
+        }
+
+        button {
+            padding: 5px 15px;
+            background: #0f0;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: inherit;
+            border-radius: 4px;
+        }
+
+        button.secondary {
+            background: #555;
+            color: #fff;
+        }
+
+        /* ANIMATIONS */
+        .hit {
+            animation: flash 0.1s;
+        }
+
+        @keyframes flash {
+            0% {
+                background: rgba(255, 255, 255, 0.3);
+            }
+
+            100% {
+                background: transparent;
+            }
+        }
+
+        /* NOTES (DOM) */
+        #note-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+            overflow: hidden;
+        }
+
+        .note {
+            position: absolute;
+            width: 4vw;
+            height: 4vw;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid #fff;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+            will-change: transform, opacity;
+        }
+
+        .note.left {
+            background: #f55;
+            left: 25%;
+        }
+
+        .note.right {
+            background: #55f;
+            left: 75%;
+        }
+
+        /* HIT EFFECTS (DOM) */
+        .hit-msg {
+            position: absolute;
+            font-size: 4vw;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 10px #fff;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            animation: floatUp 0.5s ease-out forwards;
+        }
+
+        @keyframes floatUp {
+            0% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -100%) scale(1.5);
+            }
+        }
+
+        /* OVERLAYS */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            text-align: center;
+            pointer-events: auto;
+        }
+
+        .overlay h1 {
+            font-size: 4vw;
+            margin-bottom: 20px;
+            color: #0f0;
+        }
+
+        .overlay p {
+            font-size: 1.5vw;
+            max-width: 60%;
+            line-height: 1.5;
+            margin-bottom: 30px;
+            color: #ccc;
+        }
+
+        .overlay .row {
+            display: flex;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .overlay .item {
+            display: flex;
+            flex-direction: column;
+            items-align: center;
+            gap: 10px;
+        }
+
+        .overlay .circle {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+        }
+
+        .overlay .circle.red {
+            background: #f55;
+        }
+
+        .overlay .circle.blue {
+            background: #55f;
+        }
+
+        .overlay .line-demo {
+            width: 100px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.5);
+            margin: 10px 0;
+            position: relative;
+        }
+
+        .overlay .line-demo::after {
+            content: 'TRIGGER LINE';
+            position: absolute;
+            top: -15px;
+            right: 0;
+            font-size: 10px;
+            color: #aaa;
+        }
+
+        #calibration-overlay {
+            pointer-events: none;
+            /* Let clicks pass through to canvas during calibration */
+            background: transparent;
+            justify-content: flex-start;
+            padding-top: 100px;
+        }
+
+        #calibration-msg {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+
+<body>
+
+    <canvas id="c" width=50 height=40></canvas>
+
+    <div id="controls">
+        <button id="btn-next" onclick="showTutorial()">NEXT</button>
+        <button id="btn-start" onclick="startGame('test')" style="display:none">START TEST</button>
+    </div>
+
+    <!-- START OVERLAY (For Mobile Camera Permission) -->
+    <div id="start-overlay" class="overlay" style="display: flex; background: #000; z-index: 9999;">
+        <div style="text-align: center;">
+            <h1 style="font-size: 40px; margin-bottom: 20px;">TAIKO AR</h1>
+            <p>Camera access is required to play.</p>
+            <button onclick="init()" style="font-size: 24px; padding: 15px 30px;">TAP TO START</button>
+        </div>
+    </div>
+
+    <!-- CALIBRATION UI -->
+    <div id="calibration-overlay" class="overlay" style="display: none;">
+        <div id="calibration-msg">
+            <h2>CALIBRATION MODE</h2>
+            <p style="max-width: 100%; text-align: left; margin-bottom: 15px;">
+                1. Hold a colored object (bottle, paper, etc.) in the camera view.<br>
+                2. <b>CLICK</b> the object on screen to select its unique color.<br>
+                3. You will see <b>GREEN and RED mosaics</b> on screen.<br>
+                4. Ensure the mosaics are exactly on your object, not on the background.<br>
+                5. <b>Try AIR DRUMMING:</b> Lift object ABOVE the line to strike, then put down. <br> There should be a
+                "hit" sound.<br>
+                Make sure it's sensitive. If not, repeat from step 2 or adjust tolerance below.
+            </p>
+
+            <div style="margin-top: 15px; border-top: 1px solid #555; padding-top: 10px; text-align: center;">
+                <div style="font-weight: bold; margin-bottom: 10px;">COLOR TOLERANCE: <span id="tol-display"
+                        style="color: #ff0055; font-size: 1.2em;">50</span></div>
+                <div style="display: flex; justify-content: center; gap: 20px;">
+                    <button class="secondary" onclick="adjustTol(-5)"
+                        style="width: 60px; height: 60px; font-size: 30px; line-height: 1;">-</button>
+                    <button class="secondary" onclick="adjustTol(5)"
+                        style="width: 60px; height: 60px; font-size: 30px; line-height: 1;">+</button>
+                </div>
+                <div style="font-size: 0.8em; color: #aaa; margin-top: 5px;">(Lower = Stricter, Higher = Looser)</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TUTORIAL UI -->
+    <div id="tutorial-overlay" class="overlay" style="display: none;">
+        <h1>HOW TO PLAY</h1>
+
+        <div class="row">
+            <div class="item">
+                <div class="circle red"></div>
+                <span>LEFT DRUM</span>
+            </div>
+            <div class="item">
+                <div class="circle blue"></div>
+                <span>RIGHT DRUM</span>
+            </div>
+        </div>
+
+        <p>
+            <b>1.</b> Wait for the colored notes to reach the <b>TRIGGER LINE</b>.<br>
+            <b>2.</b> Strike UP across the line with your object to hit.<br>
+            <b>3.</b> You must bring the object back DOWN below the line to reset for the next hit.
+        </p>
+
+        <button onclick="startGame('test')">START TEST RUN</button>
+    </div>
+
+    <!-- TEST RESULT UI -->
+    <div id="test-result-overlay" class="overlay" style="display: none;">
+        <h1>TEST RUN COMPLETE</h1>
+        <p>
+            Great job! You've completed the calibration test.<br>
+            Are you ready for the full song?
+        </p>
+        <div class="row">
+            <button class="secondary" onclick="showTutorial()">RE-READ TUTORIAL</button>
+            <button onclick="startGame('full')">START FULL GAME</button>
+        </div>
+    </div>
+
+    <div id="countdown" class="overlay" style="display: none; background: rgba(0,0,0,0.8);">
+        <div id="countdown-text"
+            style="font-size: 150px; font-weight: bold; color: #fff; text-shadow: 0 0 20px #ff0055;">3</div>
+    </div>
+
+    <div id="game">
+        <!-- LEFT ZONE -->
+        <div id="z0" class="zone">
+            <div class="thresh-line"></div>
+            <div class="label-line">TRIGGER LINE</div>
+
+            <div class="label-group">
+            </div>
+        </div>
+
+        <div class="spacer">
+            <div id="target-swatch" class="swatch" style="border-color:#fff"></div>
+        </div>
+
+        <!-- RIGHT ZONE -->
+        <div id="z2" class="zone">
+            <div class="thresh-line"></div>
+            <div class="label-line">TRIGGER LINE</div>
+
+            <div class="label-group">
+            </div>
+        </div>
+    </div>
+
+    <div id="score" class="main-score">0</div>
+    <div id="note-container"></div>
+
+    <script>
+        const songData = {
+            bass: [0, 66, 45, 1, 0, 1, 45, 1, 0, 3, 45, 1, 0, 3, 45, 1, 0, 1, 45, 1, 0, 1, 45, 1, 0, 3, 45, 1, 0, 3, 45, 1, 0, 1, 45, 1, 0, 1, 45, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 1, 48, 1, 0, 5, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 21, 42, 1, 0, 3, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 19, 43, 1, 0, 5, 45, 1, 0, 1, 45, 1, 0, 3, 45, 1, 0, 3, 45, 1, 0, 1, 45, 1, 0, 1, 45, 1, 0, 3, 45, 1, 0, 3, 45, 1, 0, 1, 45, 1, 0, 1, 45, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 1, 48, 1, 0, 1, 42, 1, 0, 3, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 21, 42, 1, 0, 3, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 19, 43, 1, 0, 5, 45, 1, 0, 1, 45, 1, 0, 3, 45, 1, 0, 3, 45, 1, 0, 1, 45, 1, 0, 1, 45, 1, 0, 3, 45, 1, 0, 3, 45, 1, 0, 1, 45, 1, 0, 1, 45, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 1, 48, 1, 0, 1, 42, 1, 0, 3, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 21, 42, 1, 0, 3, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 19, 43, 1, 0, 5, 45, 1, 0, 1, 45, 1, 0, 3, 45, 1, 0, 3, 45, 1, 0, 1, 45, 1, 0, 1, 45, 1, 0, 3, 45, 1, 0, 3, 45, 1, 0, 1, 45, 1, 0, 1, 45, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 1, 48, 1, 0, 1, 42, 1, 0, 3, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 5, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 5, 43, 1, 0, 1, 43, 1, 0, 1, 42, 1, 0, 3, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 5, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 5, 43, 1, 0, 1, 43, 1, 0, 1, 45, 1, 0, 3, 45, 1, 0, 1, 45, 1, 0, 3, 45, 1, 0, 3, 45, 1, 0, 1, 45, 1, 0, 1, 45, 1, 0, 3, 45, 1, 0, 3, 45, 1, 0, 1, 45, 1, 0, 1, 45, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 1, 48, 1, 0, 3, 48, 1, 0, 3, 48, 1, 0, 1, 48, 1, 0, 1, 48, 1, 0, 1, 42, 1, 0, 3, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 5, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 5, 43, 1, 0, 1, 43, 1, 0, 1, 42, 1, 0, 3, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0, 5, 43, 1, 0, 1, 43, 1, 0, 3, 43, 1, 0],
+            drums: [36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 28, 1, 0, 3, 39, 1, 0, 1, 36, 1, 0, 1, 28, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 28, 1, 0, 3, 39, 1, 0, 1, 36, 1, 0, 1, 28, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 39, 1, 0, 3, 31, 1, 0, 1, 36, 1, 0, 1, 39, 1, 0, 1, 31, 1, 0, 1, 36, 1, 0, 3, 42, 1, 0, 1, 36, 1, 0, 3, 31, 1, 0, 1, 40, 1, 0, 1, 36, 1, 0, 1, 36, 1, 0, 3, 40, 1],
+            accomp: [0, 448, 57, 32, 60, 32, 55, 64, 57, 32, 60, 32, 55, 64],
+            melody: [0, 56, 86, 2, 83, 2, 81, 2, 79, 2, 83, 4, 0, 18, 74, 2, 86, 2, 83, 2, 81, 2, 79, 2, 83, 4, 0, 20, 86, 2, 83, 2, 81, 2, 79, 2, 83, 2, 81, 2, 79, 4, 0, 4, 76, 4, 74, 4, 0, 4, 86, 2, 83, 2, 81, 2, 79, 2, 83, 2, 81, 2, 79, 4, 0, 4, 76, 4, 74, 4, 71, 2, 74, 2, 86, 2, 83, 2, 81, 2, 79, 2, 83, 4, 0, 18, 74, 2, 86, 2, 83, 2, 81, 2, 79, 2, 83, 4, 0, 14, 74, 2, 74, 4, 86, 2, 83, 2, 81, 2, 79, 2, 83, 2, 81, 2, 79, 4, 0, 4, 76, 4, 74, 4, 0, 4, 86, 2, 83, 2, 81, 2, 79, 2, 83, 2, 81, 2, 79, 4, 0, 4, 76, 4, 74, 3, 0, 1, 83, 4, 81, 4, 79, 4, 81, 6, 0, 2, 76, 6, 0, 2, 81, 3, 0, 1, 83, 3, 0, 1, 81, 3, 0, 1, 79, 3, 0, 1, 81, 6, 0, 2, 76, 4, 0, 2, 76, 2, 81, 3, 0, 1, 83, 3, 0, 1, 81, 3, 0, 1, 79, 3, 0, 1, 81, 6, 0, 2, 79, 6, 0, 2, 81, 3, 0, 1, 83, 3, 0, 1, 79, 3, 0, 1, 76, 2, 79, 2, 81, 3, 0, 1, 81, 2, 83, 2, 81, 2, 79, 4, 79, 6, 0, 8, 76, 2, 79, 2, 81, 2, 81, 2, 81, 2, 83, 2, 79, 4, 0, 16, 76, 2, 79, 2, 81, 2, 81, 2, 81, 2, 83, 2, 79, 4, 0, 20, 81, 2, 81, 2, 81, 2, 83, 2, 79, 4, 0, 18, 79, 2, 81, 2, 83, 2, 79, 4, 0, 2, 79, 2, 81, 2, 83, 2, 79, 4, 0, 8, 79, 4, 81, 2, 81, 2, 81, 2, 83, 2, 79, 4, 0, 16, 76, 2, 79, 2, 81, 2, 81, 2, 81, 2, 83, 2, 79, 4, 0, 16, 76, 2, 79, 2, 81, 2, 81, 2, 81, 2, 83, 2, 79, 4, 0, 18, 79, 2, 81, 2, 83, 2, 79, 4, 0, 2, 79, 2, 81, 2, 83, 2, 79, 4],
+            right: [43, 2, 0, 12, 43, 2, 0, 10, 43, 2, 0, 36, 43, 2, 0, 14, 43, 2, 0, 14, 43, 2, 0, 12, 43, 2, 0, 8, 43, 2, 0, 12, 43, 2, 0, 6, 43, 2, 0, 16, 43, 2, 0, 12, 43, 2, 0, 16, 43, 2, 0, 30, 43, 2, 0, 18, 43, 2, 0, 22, 43, 2, 0, 18, 43, 2, 0, 14, 43, 2, 0, 14, 43, 2, 0, 30, 43, 2, 0, 30, 43, 2, 0, 30, 43, 2, 0, 44, 45, 2, 0, 30, 48, 2, 0, 32, 43, 2, 0, 14, 43, 2, 0, 14, 43, 2, 0, 26, 45, 2, 0, 30, 45, 2, 0, 30, 43, 2, 0, 22, 43, 2, 0, 10, 43, 2],
+            left: [0, 32, 43, 2, 0, 12, 43, 2, 0, 10, 43, 2, 0, 16, 43, 2, 0, 24, 43, 2, 0, 24, 43, 2, 0, 14, 43, 2, 0, 8, 43, 2, 0, 10, 43, 2, 0, 24, 43, 2, 0, 36, 43, 2, 0, 16, 43, 2, 0, 38, 43, 2, 0, 10, 43, 2, 0, 26, 43, 2, 0, 22, 43, 2, 0, 32, 43, 2, 0, 28, 43, 2, 0, 14, 43, 2, 0, 26, 45, 2, 0, 34, 48, 2, 0, 28, 43, 2, 0, 16, 43, 2, 0, 10, 43, 2, 0, 34, 45, 2, 0, 30, 45, 2, 0, 26, 43, 2, 0, 18, 43, 2, 0, 10, 43, 2],
+        };
+
+        const ctx = c.getContext('2d');
+        const w = 50, h = 40;
+
+        // Window: +/- 0.45s (Generous)
+        const HIT_WINDOW = 0.45;
+        // Hardcoded optimal settings: size=10, offset=-0.06
+        const CFG = { tol: 50, size: 10, speed: 20, offset: -0.06 };
+        const TRIGGER_Y_RATIO = 0.6;
+        const TRIGGER_Y = h * TRIGGER_Y_RATIO;
+
+        // GAME STATE
+        let gameState = 'calibration'; // calibration -> tutorial -> test_game -> test_result -> game
+        let isPlaying = false;
+        let startTime = 0;
+        let score = 0;
+        let combo = 0;
+        let chartData = [];   // Interactive Notes from Left/Right tracks
+        let melodyData = [];  // Not used for display, just background audio logic
+        let songDuration = 0; // Calculated duration
+
+        // MIDI CONSTANTS for Timing
+        const TEMPO = 160;
+        const SEC_PER_16TH = (60 / TEMPO) / 4;
+
+        // TRACKERS
+        let trackers = [
+            { id: 0, active: false, color: { r: 0, b: 0, g: 0 }, isTriggered: false, lastTrigger: 0 },
+            {},
+            { id: 2, active: false, color: { r: 0, b: 0, g: 0 }, isTriggered: false, lastTrigger: 0 }
+        ];
+
+        // AUDIO ENGINE
+        const mtof = note => 440 * Math.pow(2, (note - 69) / 12);
+
+        const AUDIO = {
+            ctx: null,
+            init: () => {
+                if (!AUDIO.ctx) AUDIO.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (AUDIO.ctx.state === 'suspended') AUDIO.ctx.resume();
+            },
+            reset: async () => {
+                if (AUDIO.ctx) {
+                    try { await AUDIO.ctx.close(); } catch (e) { }
+                    AUDIO.ctx = null;
+                }
+            },
+            playTone: (note, time, dur, type = 'sine') => {
+                if (!AUDIO.ctx) return;
+                const osc = AUDIO.ctx.createOscillator();
+                const gain = AUDIO.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(AUDIO.ctx.destination);
+                osc.type = type;
+                osc.frequency.value = mtof(note);
+                gain.gain.setValueAtTime(0.3, time);
+                gain.gain.exponentialRampToValueAtTime(0.001, time + dur * 0.9);
+                osc.start(time);
+                osc.stop(time + dur);
+            },
+            playSaw: (note, time, dur) => {
+                // For interactive notes (Right/Left), use Sawtooth for distinct sound
+                AUDIO.playTone(note, time, dur, 'sawtooth');
+            },
+            playNoise: (time, dur) => {
+                if (!AUDIO.ctx) return;
+                const bufferSize = AUDIO.ctx.sampleRate * dur;
+                const buffer = AUDIO.ctx.createBuffer(1, bufferSize, AUDIO.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
+                const noise = AUDIO.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const gain = AUDIO.ctx.createGain();
+                gain.connect(AUDIO.ctx.destination);
+                noise.connect(gain);
+                gain.gain.setValueAtTime(0.5, time);
+                gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
+                noise.start(time);
+            },
+            playDrum: (note, time, dur) => {
+                if (!AUDIO.ctx) return;
+                // Basic gm mapping for our compressed drums
+                if (note === 36 || note === 35) { // Kick
+                    const osc = AUDIO.ctx.createOscillator();
+                    const gain = AUDIO.ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(AUDIO.ctx.destination);
+                    osc.frequency.setValueAtTime(150, time);
+                    osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.1);
+                    gain.gain.setValueAtTime(0.8, time);
+                    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+                    osc.start(time);
+                    osc.stop(time + 0.1);
+                } else if (note === 38 || note === 40) { // Snare
+                    AUDIO.playNoise(time, 0.1);
+                } else { // Cymbal/Hihat
+                    AUDIO.playCymbal(time);
+                }
+            },
+            playCymbal: (time) => {
+                if (!AUDIO.ctx) return;
+                // High pass noise
+                const bufferSize = AUDIO.ctx.sampleRate * 0.05;
+                const buffer = AUDIO.ctx.createBuffer(1, bufferSize, AUDIO.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) { data[i] = (Math.random() * 2 - 1); }
+                const noise = AUDIO.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const gain = AUDIO.ctx.createGain();
+                const filter = AUDIO.ctx.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.value = 5000;
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(AUDIO.ctx.destination);
+                gain.gain.setValueAtTime(0.4, time);
+                gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+                noise.start(time);
+            }
+        };
+
+        function scheduleParams(trackData) {
+            let list = [];
+            let timeCursor = 0;
+            for (let i = 0; i < trackData.length; i += 2) {
+                const pitch = trackData[i];
+                const dur16ths = trackData[i + 1];
+                const durSeconds = dur16ths * SEC_PER_16TH;
+                if (pitch !== 0) {
+                    list.push({ time: timeCursor, pitch: pitch, dur: durSeconds });
+                }
+                timeCursor += durSeconds;
+            }
+            return list;
+        }
+
+        // Parse songData into a unified Chart
+        function parseSongData() {
+            // Background Tracks
+            const bass = scheduleParams(songData.bass);
+            const melody = scheduleParams(songData.melody);
+            const accomp = scheduleParams(songData.accomp);
+            const drums = scheduleParams(songData.drums);
+
+            // Interactive Tracks
+            const right = scheduleParams(songData.right); // Type 2 (Snare/Right)
+            const left = scheduleParams(songData.left);   // Type 0 (Kick/Left)
+
+            // Convert Interactive to Chart format
+            // Chart objects: { time: relativeSec, type: 0|2, pitch: int, dur: float, hit: bool }
+            let combinedChart = [];
+
+            right.forEach(n => {
+                combinedChart.push({ ...n, type: 2, hit: false });
+            });
+            left.forEach(n => {
+                combinedChart.push({ ...n, type: 0, hit: false });
+            });
+
+            combinedChart.sort((a, b) => a.time - b.time);
+
+            // Calculate roughly song duration from last note of background track
+            let maxTime = 0;
+            [bass, melody, accomp, drums].forEach(track => {
+                if (track.length > 0) {
+                    const last = track[track.length - 1];
+                    if (last.time + last.dur > maxTime) maxTime = last.time + last.dur;
+                }
+            });
+            songDuration = maxTime;
+
+            return {
+                bg: { bass, melody, accomp, drums },
+                chart: combinedChart
+            };
+        }
+
+        function showTutorial() {
+            // Reset Game & Audio but Keep Calibration
+            isPlaying = false;
+            AUDIO.reset();
+            document.getElementById('note-container').innerHTML = '';
+
+            gameState = 'tutorial';
+            document.getElementById('calibration-overlay').style.display = 'none';
+            document.getElementById('btn-next').style.display = 'none';
+            document.getElementById('tutorial-overlay').style.display = 'flex';
+            document.getElementById('test-result-overlay').style.display = 'none';
+        }
+
+        function adjustTol(delta) {
+            CFG.tol = Math.max(10, Math.min(400, parseInt(CFG.tol) + delta));
+
+            const disp = document.getElementById('tol-display');
+            if (disp) disp.innerText = CFG.tol;
+
+            // Visual feedback of change? Maybe not needed as user should see mosaic change.
+        }
+
+        async function startGame(mode) {
+            console.log("startGame called with mode:", mode);
+            await AUDIO.reset();
+
+            setTimeout(() => {
+                document.getElementById('tutorial-overlay').style.display = 'none';
+                document.getElementById('test-result-overlay').style.display = 'none';
+
+                // Countdown logic
+                const countOverlay = document.getElementById('countdown');
+                const countText = document.getElementById('countdown-text');
+                countOverlay.style.display = 'flex';
+                let count = 3;
+                countText.innerText = count;
+
+                const interval = setInterval(() => {
+                    count--;
+                    if (count > 0) {
+                        countText.innerText = count;
+                    } else {
+                        clearInterval(interval);
+                        countOverlay.style.display = 'none';
+                        startActualGame(mode);
+                    }
+                }, 1000);
+            }, 50);
+        }
+
+        function startActualGame(mode) {
+            AUDIO.init();
+
+            gameState = (mode === 'test') ? 'test_game' : 'game';
+            document.getElementById('controls').style.display = 'none'; // Hide all controls in game
+            document.getElementById('score').style.display = 'block';
+
+            const song = parseSongData();
+            chartData = song.chart;
+
+            startTime = AUDIO.ctx.currentTime + 0.1;
+            isPlaying = true;
+            score = 0;
+            combo = 0;
+            updateScore();
+
+            // Schedule Background Tracks
+            // These play automatically
+            song.bg.melody.forEach(n => AUDIO.playTone(n.pitch, startTime + n.time, n.dur, 'square'));
+            song.bg.bass.forEach(n => AUDIO.playTone(n.pitch, startTime + n.time, n.dur, 'triangle'));
+            song.bg.accomp.forEach(n => AUDIO.playTone(n.pitch, startTime + n.time, n.dur, 'sine'));
+            song.bg.drums.forEach(n => AUDIO.playDrum(n.pitch, startTime + n.time, n.dur));
+
+            // Chart notes are interactive!
+            // Create DOM elements for notes
+            const container = document.getElementById('note-container');
+            container.innerHTML = ''; // Clear old
+            chartData.forEach(note => {
+                const el = document.createElement('div');
+                el.className = `note ${note.type === 0 ? 'left' : 'right'}`;
+                // Initial hide
+                el.style.display = 'none';
+                container.appendChild(el);
+                note.el = el;
+            });
+        }
+
+        function ensureAudio() { AUDIO.init(); }
+
+        function updateScore(text) {
+            const el = document.getElementById('score');
+            if (el) {
+                if (text) {
+                    el.innerText = text;
+                    setTimeout(() => { if (isPlaying) el.innerText = score; }, 500);
+                } else {
+                    el.innerText = score;
+                }
+            }
+        }
+
+        function trigger(id) {
+            if (!AUDIO.ctx) return;
+            const now = AUDIO.ctx.currentTime;
+
+            // Visual feedback
+            const el = document.getElementById('z' + id);
+            if (el) {
+                el.classList.remove('hit');
+                void el.offsetWidth;
+                el.classList.add('hit');
+            }
+
+            // Always play default sound if NOT in game (Sound Check)
+            if (!isPlaying) {
+                AUDIO.playCymbal(now);
+                return;
+            }
+
+            // Game Logic
+            const gameTime = now - startTime;
+            const laneNotes = chartData.filter(n => n.type === id && !n.hit);
+
+            let closestNote = null;
+            let minDiff = Infinity;
+
+            for (let n of laneNotes) {
+                const dt = n.time - gameTime;
+                const diff = Math.abs(dt - CFG.offset);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestNote = n;
+                }
+            }
+
+            // Check Hit
+            if (closestNote && minDiff <= HIT_WINDOW) {
+                closestNote.hit = true;
+                score += 100;
+                combo++;
+                // updateScore("HIT!"); // Avoid flashing HIT in the center too much, just update score
+
+                // Visual Effect (DOM)
+                // Logic: Left(0) -> 25%, Right(2) -> 75%
+                const fxX = id === 0 ? '25%' : '75%';
+                showHitEffect(fxX, '60%', "HIT!"); // TRIGGER_Y is approx 60%
+
+                // PLAY THE NOTE associated with this hit!
+                // Using Sawtooth for the Melody/Lead line stored in Left/Right tracks
+                // AUDIO.playSaw(closestNote.pitch, now, closestNote.dur); 
+                // User requested CYMBAL sound for both Left/Right
+                AUDIO.playCymbal(now);
+
+                updateScore();
+            }
+            else {
+                // MISS
+            }
+        }
+
+        // CONTROL & INPUT
+        c.onclick = (e) => {
+            AUDIO.init(); // Ensure Audio Context on first interaction
+            const rect = c.getBoundingClientRect();
+            // In calibration, clicks select color
+            // In tutorial/game, clicks might be accidental but we still allow color re-locking if needed (design choice: usually lock in calibration only?)
+            // Let's only allow color picking in CALIBRATION mode
+
+            if (gameState !== 'calibration') return;
+
+            let visualX = e.clientX - rect.left;
+            let visualY = e.clientY - rect.top;
+            let canvasX = w - Math.floor((visualX / rect.width) * w);
+            let canvasY = Math.floor((visualY / rect.height) * h);
+            canvasX = Math.max(0, Math.min(w - 1, canvasX));
+            canvasY = Math.max(0, Math.min(h - 1, canvasY));
+
+            const p = ctx.getImageData(canvasX, canvasY, 1, 1).data;
+            const color = { r: p[0], g: p[1], b: p[2] };
+
+            let zId = -1;
+            // Removed side restriction for picking? No, user wants consistent sensitivity.
+            // But for picking, we can pick anywhere. 
+            // Actually, code below updates BOTH trackers with the SAME color.
+
+            // UPDATE BOTH TRACKERS WITH THE SAME COLOR
+            const rgb = `rgb(${color.r},${color.g},${color.b})`;
+            const sEl = document.getElementById('target-swatch');
+            if (sEl) sEl.style.background = rgb;
+
+            [0, 2].forEach(id => {
+                trackers[id].color = color;
+                trackers[id].active = true;
+                // Update visual zone border
+                const zEl = document.getElementById('z' + id);
+                if (zEl) zEl.style.borderColor = rgb;
+            });
+
+            if (!isPlaying) {
+                AUDIO.playCymbal(AUDIO.ctx.currentTime);
+            }
+        }
+
+        async function init() {
+            try {
+                // Ensure audio context is created/resumed on user gesture
+                if (!AUDIO.ctx) AUDIO.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (AUDIO.ctx.state === 'suspended') await AUDIO.ctx.resume();
+
+                // Polyfill/Fallback for older browsers or insecure contexts (though modern browsers block it on HTTP)
+                navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
+
+                let stream;
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: "environment",
+                            width: { ideal: 320 },
+                            height: { ideal: 240 }
+                        },
+                        audio: false
+                    });
+                } else if (navigator.getUserMedia) {
+                    stream = await new Promise((resolve, reject) => {
+                        navigator.getUserMedia({
+                            video: {
+                                facingMode: "environment",
+                                width: { ideal: 320 },
+                                height: { ideal: 240 }
+                            },
+                            audio: false
+                        }, resolve, reject);
+                    });
+                } else {
+                    throw new Error("Browser does not support camera access via getUserMedia.");
+                }
+                const v = document.createElement('video');
+                v.srcObject = stream;
+                v.play();
+
+                // Hide start overlay if present
+                const startOverlay = document.getElementById('start-overlay');
+                if (startOverlay) startOverlay.style.display = 'none';
+
+                // Show calibration
+                document.getElementById('calibration-overlay').style.display = 'flex';
+
+                loop(v);
+            } catch (e) {
+                console.error(e);
+                alert("Camera access failed: " + e.message);
+            }
+        }
+        // init(); // Don't auto-init
+
+        function stopGameForTestResult() {
+            console.log("Stopping game for test result...");
+            isPlaying = false;
+            // Suspend audio to silence it
+            if (AUDIO.ctx) AUDIO.ctx.suspend();
+
+            gameState = 'test_result';
+            document.getElementById('test-result-overlay').style.display = 'flex';
+            document.getElementById('score').style.display = 'none';
+            // Optionally show controls if needed, but overlay handles restart.
+        }
+
+        // HIT EFFECTS DOM
+        function showHitEffect(left, top, text) {
+            const container = document.getElementById('note-container');
+            const el = document.createElement('div');
+            el.className = 'hit-msg';
+            el.innerText = text;
+            el.style.left = left;
+            el.style.top = top;
+            container.appendChild(el);
+            setTimeout(() => el.remove(), 500);
+        }
+
+        function loop(v) {
+            // Draw Video
+            ctx.drawImage(v, 0, 0, w, h);
+
+            // Draw Hit Window (Visual Guide)
+            const offsetPx = CFG.offset * CFG.speed;
+            const winTop = TRIGGER_Y - (HIT_WINDOW * CFG.speed) - offsetPx;
+            const winBot = TRIGGER_Y + (HIT_WINDOW * CFG.speed) - offsetPx;
+            const winHeight = winBot - winTop;
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fillRect(0, winTop, w, winHeight);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.strokeRect(0, winTop, w, winHeight);
+
+            const data = ctx.getImageData(0, 0, w, h).data;
+            let counts = { 0: 0, 2: 0 };
+            const LINE_Y_PIXELS = Math.floor(h * TRIGGER_Y_RATIO);
+
+            for (let i = 0; i < data.length; i += 4) {
+                const index = i / 4;
+                const x = index % w;
+                const y = Math.floor(index / w);
+
+                if (y >= LINE_Y_PIXELS) continue;
+
+                const r = data[i], g = data[i + 1], b = data[i + 2];
+
+                if (trackers[0].active && x > w / 2) {
+                    const t = trackers[0].color;
+                    const diff = Math.abs(r - t.r) + Math.abs(g - t.g) + Math.abs(b - t.b);
+                    if (diff < CFG.tol) {
+                        counts[0]++;
+                        data[i + 1] = 255;
+                    }
+                }
+
+                if (trackers[2].active && x < w / 2) {
+                    const t = trackers[2].color;
+                    const diff = Math.abs(r - t.r) + Math.abs(g - t.g) + Math.abs(b - t.b);
+                    if (diff < CFG.tol) {
+                        counts[2]++;
+                        data[i] = 255;
+                    }
+                }
+            }
+
+            ctx.putImageData(new ImageData(data, w, h), 0, 0);
+
+            [0, 2].forEach(id => {
+                const count = counts[id];
+                const tracker = trackers[id];
+                if (!tracker.active) return;
+
+                if (count > parseInt(CFG.size)) {
+                    const now = Date.now();
+                    if (!tracker.isTriggered && (now - tracker.lastTrigger > 100)) {
+                        trigger(id);
+                        tracker.isTriggered = true;
+                        tracker.lastTrigger = now;
+                    }
+                }
+                else if (count < parseInt(CFG.size) / 2) {
+                    if (tracker.isTriggered) {
+                        tracker.isTriggered = false;
+                    }
+                }
+            });
+
+            if (isPlaying && AUDIO.ctx) {
+                const gameTime = AUDIO.ctx.currentTime - startTime;
+
+                // Logic for Test Mode Duration Check
+                if (gameState === 'test_game') {
+                    // console.log("Test Mode Check:", gameTime, songDuration, songDuration * 0.2);
+                    // Check if time > 20% of song
+                    if (songDuration > 0 && gameTime > songDuration * 0.2) {
+                        console.log("Test Mode Complete. Stopping game.");
+                        stopGameForTestResult();
+                        // return; // Don't return, keep looping!
+                    }
+                }
+
+                // Draw Notes (DOM Update)
+                chartData.forEach(note => {
+                    // Update DOM position
+                    if (note.hit) {
+                        if (note.el.style.display !== 'none') note.el.style.display = 'none';
+                        return;
+                    }
+
+                    const dt = note.time - gameTime;
+                    const y = TRIGGER_Y - (dt * CFG.speed); // Logic Y (0-40)
+
+                    // Convert Logic Y to Screen %
+                    // TRIGGER_Y is 24 (60% of 40). 
+                    // So y=24 is 60%. y=0 is 0%.
+                    // % = (y / h) * 100
+                    const yPct = (y / h) * 100;
+
+                    if (yPct > -10 && yPct < 110) {
+                        note.el.style.display = 'block';
+                        note.el.style.top = `${yPct}%`;
+
+                        // Hit Window Highlight
+                        if (Math.abs(dt - CFG.offset) <= HIT_WINDOW) {
+                            note.el.style.borderColor = '#fff';
+                            note.el.style.boxShadow = '0 0 15px #fff';
+                            note.el.style.transform = 'translate(-50%, -50%) scale(1.1)';
+                        } else {
+                            note.el.style.borderColor = '#fff'; // Reset
+                            note.el.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)';
+                            note.el.style.transform = 'translate(-50%, -50%) scale(1)';
+                        }
+                    } else {
+                        note.el.style.display = 'none';
+                    }
+                });
+
+                if (chartData.length > 0 && gameTime > chartData[chartData.length - 1].time + 2) {
+                    if (gameState === 'test_game') {
+                        stopGameForTestResult();
+                    } else {
+                        isPlaying = false;
+                        alert("Song Complete! Final Score: " + score);
+                        score = 0; combo = 0;
+                        location.reload();
+                    }
+                }
+            }
+            requestAnimationFrame(() => loop(v));
+        }
+    </script>
+</body>
+
+</html>
